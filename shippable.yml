@@ -5,7 +5,7 @@ jdk:
    - openjdk7
 
 services:
-  - neo4j
+  - mysql
   
 script: 
    - mvn package
