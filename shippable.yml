@@ -2,11 +2,12 @@ language: java
 
 jdk:
    - oraclejdk7
-   - openjdk6
    - openjdk7
+mysql> 0.0.0
+maven>= 3.0
 
 script: 
-   - ant coverage
+   - mvn package
 
 notifications:
   email:
