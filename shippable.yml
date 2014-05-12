@@ -1,0 +1,15 @@
+language: java
+
+jdk:
+   - oraclejdk7
+   - openjdk6
+   - openjdk7
+
+script: 
+   - ant coverage
+
+notifications:
+  email:
+      recipients:
+         - raghu@shippable.com
+    
