@@ -1,101 +1,109 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
-  <modelVersion>4.0.0</modelVersion>
-  <packaging>war</packaging>
-  <version>1.0</version>
+<project name="cobertura.examples.basic" default="coverage" basedir=".">
 
-  <groupId>com.google.appengine.demos</groupId>
-  <artifactId>native-mysql-eclipselink-jpa</artifactId>
+        <property file="build.properties" />
 
-  <properties>
-    <appengine.app.appId>your-app-id</appengine.app.appId>
-    <appengine.app.version>1</appengine.app.version>
-    <appengine.target.version>1.8.1</appengine.target.version>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <cloudsql.url>jdbc:google:mysql://your-instance-name/demo?user=root</cloudsql.url>
-    <cloudsql.url.dev>jdbc:mysql://localhost/demo?user=root</cloudsql.url.dev>
-  </properties>
+        <path id="cobertura.classpath">
+                <fileset dir="${cobertura.dir}">
+                        <include name="cobertura.jar" />
+                        <include name="lib/**/*.jar" />
+                </fileset>
+        </path>
 
-  <dependencies>
-    <!-- Compile/runtime dependencies -->
-    <dependency>
-      <groupId>com.google.appengine</groupId>
-      <artifactId>appengine-api-1.0-sdk</artifactId>
-      <version>${appengine.target.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>javax.servlet</groupId>
-      <artifactId>servlet-api</artifactId>
-      <version>2.5</version>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>jstl</groupId>
-      <artifactId>jstl</artifactId>
-      <version>1.2</version>
-    </dependency>
-    <dependency>
-      <groupId>mysql</groupId>
-      <artifactId>mysql-connector-java</artifactId>
-      <version>5.1.25</version>
-    </dependency>
-    <dependency>
-      <groupId>org.eclipse.persistence</groupId>
-      <artifactId>org.eclipse.persistence.jpa</artifactId>
-      <version>2.4.2</version>
-    </dependency>
+        <taskdef classpathref="cobertura.classpath" resource="tasks.properties"/>
 
-    <!-- Test Dependencies -->
-    <dependency>
-      <groupId>com.google.appengine</groupId>
-      <artifactId>appengine-testing</artifactId>
-      <version>${appengine.target.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.appengine</groupId>
-      <artifactId>appengine-api-stubs</artifactId>
-      <version>${appengine.target.version}</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
+        <target name="init">
+                <mkdir dir="${classes.dir}" />
+                <mkdir dir="${instrumented.dir}" />
+                <mkdir dir="${reports.xml.dir}" />
+                <mkdir dir="${coverage.xml.dir}" />
+        </target>
 
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <version>2.5.1</version>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>1.6</source>
-          <target>1.6</target>
-        </configuration>
-      </plugin>
+        <target name="compile" depends="init">
+                <javac srcdir="${src.dir}" destdir="${classes.dir}" debug="yes">
+                        <classpath refid="cobertura.classpath" />
+                </javac>
+        </target>
 
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-war-plugin</artifactId>
-        <version>2.3</version>
-        <configuration>
-          <archiveClasses>true</archiveClasses>
-          <webResources>
-            <!-- in order to interpolate version from pom into appengine-web.xml -->
-            <resource>
-              <directory>${basedir}/src/main/webapp/WEB-INF</directory>
-              <filtering>true</filtering>
-              <targetPath>WEB-INF</targetPath>
-            </resource>
-          </webResources>
-        </configuration>
-      </plugin>
+        <target name="instrument" depends="init,compile">
+                <!--
+                        Remove the coverage data file and any old instrumentation.
+                -->
+                <delete file="cobertura.ser"/>
+                <delete dir="${instrumented.dir}" />
 
-      <plugin>
-        <groupId>com.google.appengine</groupId>
-        <artifactId>appengine-maven-plugin</artifactId>
-        <version>${appengine.target.version}</version>
-      </plugin>
-    </plugins>
-  </build>
+                <!--
+                        Instrument the application classes, writing the
+                        instrumented classes into ${build.instrumented.dir}.
+                -->
+                <cobertura-instrument todir="${instrumented.dir}">
+                        <!--
+                                The following line causes instrument to ignore any
+                                source line containing a reference to log4j, for the
+                                purposes of coverage reporting.
+                        -->
+                        <ignore regex="org.apache.log4j.*" />
+
+                        <fileset dir="${classes.dir}">
+                                <!--
+                                        Instrument all the application classes, but
+                                        don't instrument the test classes.
+                                -->
+                                <include name="**/*.class" />
+                                <exclude name="**/*Test.class" />
+                        </fileset>
+                </cobertura-instrument>
+        </target>
+
+        <target name="test" depends="init,compile">
+                <junit haltonfailure="no" showoutput="yes" >
+                        <!--
+                                Note the classpath order: instrumented classes are before the
+                                original (uninstrumented) classes.  This is important.
+                        -->
+                        <classpath location="${instrumented.dir}" />
+                        <classpath location="${classes.dir}" />
+
+                        <!--
+                                The instrumented classes reference classes used by the
+                                Cobertura runtime, so Cobertura and its dependencies
+                                must be on your classpath.
+                        -->
+                        <classpath refid="cobertura.classpath" />
+
+                        
+                        <batchtest fork="yes" todir="${reports.xml.dir}">
+				<formatter type="xml" />
+                                <fileset dir="${src.dir}">
+                                        <include name="**/*Test*.java" />
+                                </fileset>
+                        </batchtest>
+                </junit>
+
+               
+        </target>
+
+        <target name="coverage-check">
+                <cobertura-check branchrate="34" totallinerate="100" />
+        </target>
+
+        <target name="coverage-report">
+                <!--
+                        Generate an XML file containing the coverage data using
+                        the "srcdir" attribute.
+                -->
+                <cobertura-report srcdir="${src.dir}" destdir="${coverage.xml.dir}" format="xml" />
+        </target>
+
+        <target name="clean" description="Remove all files created by the build/test process.">
+                <delete dir="${classes.dir}" />
+                <delete dir="${instrumented.dir}" />
+                <delete dir="${reports.dir}" />
+                <delete file="cobertura.log" />
+                <delete file="cobertura.ser" />
+        </target>
+
+        <target name="coverage" depends="compile,instrument,test,coverage-report" description="Compile, instrument ourself, run the tests and generate JUnit and coverage reports."/>
 
 </project>
